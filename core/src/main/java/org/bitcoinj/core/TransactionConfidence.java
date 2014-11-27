@@ -17,7 +17,6 @@
 
 package org.bitcoinj.core;
 
-import com.google.common.collect.Sets;
 import org.bitcoinj.utils.ListenerRegistration;
 import org.bitcoinj.utils.Threading;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -26,7 +25,6 @@ import com.google.common.util.concurrent.SettableFuture;
 import javax.annotation.Nullable;
 import java.io.Serializable;
 import java.util.ListIterator;
-import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 
@@ -285,9 +283,8 @@ public class TransactionConfidence implements Serializable {
     /**
      * Returns a snapshot of {@link PeerAddress}es that announced the transaction.
      */
-    public Set<PeerAddress> getBroadcastBy() {
-        ListIterator<PeerAddress> iterator = broadcastBy.listIterator();
-        return Sets.newHashSet(iterator);
+    public ListIterator<PeerAddress> getBroadcastBy() {
+        return broadcastBy.listIterator();
     }
 
     /** Returns true if the given address has been seen via markBroadcastBy() */

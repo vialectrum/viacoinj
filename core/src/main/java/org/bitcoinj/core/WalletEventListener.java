@@ -116,10 +116,6 @@ public interface WalletEventListener extends KeyChainEventListener {
      */
     void onWalletChanged(Wallet wallet);
 
-    /**
-     * Called whenever a new watched script is added to the wallet.
-     *
-     * @param isAddingScripts will be true if added scripts, false if removed scripts.
-     */
-    void onScriptsChanged(Wallet wallet, List<Script> scripts, boolean isAddingScripts);
+    /** Called whenever a new watched script is added to the wallet. */
+    void onScriptsAdded(Wallet wallet, List<Script> scripts);
 }

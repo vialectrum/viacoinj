@@ -1,6 +1,5 @@
 package org.bitcoinj.net;
 
-import com.google.common.collect.Lists;
 import org.bitcoinj.core.BloomFilter;
 import org.bitcoinj.core.PeerFilterProvider;
 import com.google.common.collect.ImmutableList;
@@ -38,15 +37,16 @@ public class FilterMerger {
     }
 
     public Result calculate(ImmutableList<PeerFilterProvider> providers) {
-        LinkedList<PeerFilterProvider> begunProviders = Lists.newLinkedList();
+        LinkedList<Lock> takenLocks = new LinkedList<Lock>();
         try {
-            // All providers must be in a consistent, unchanging state because the filter is a merged one that's
-            // large enough for all providers elements: if a provider were to get more elements in the middle of the
-            // calculation, we might assert or calculate the filter wrongly. Most providers use a lock here but
-            // snapshotting required state is also a legitimate strategy.
+            // Lock all the providers so they cannot be mutated out from underneath us whilst we're in the process
+            // of calculating the Bloom filter. All providers must be in a consistent, unchanging state because the
+            // filter is a merged one that's large enough for all providers elements: if a provider were to get more
+            // elements in the middle of the calculation, we might assert or calculate the filter wrongly.
             for (PeerFilterProvider provider : providers) {
-                provider.beginBloomFilterCalculation();
-                begunProviders.add(provider);
+                Lock lock = provider.getLock();
+                lock.lock();
+                takenLocks.add(lock);
             }
             Result result = new Result();
             result.earliestKeyTimeSecs = Long.MAX_VALUE;
@@ -79,8 +79,8 @@ public class FilterMerger {
             result.earliestKeyTimeSecs -= 86400 * 7;
             return result;
         } finally {
-            for (PeerFilterProvider provider : begunProviders) {
-                provider.endBloomFilterCalculation();
+            for (Lock takenLock : takenLocks) {
+                takenLock.unlock();
             }
         }
     }

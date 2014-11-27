@@ -498,8 +498,13 @@ public abstract class AbstractBlockChain {
                     // newStoredBlock is a part of the same chain, there's no fork. This happens when we receive a block
                     // that we already saw and linked into the chain previously, which isn't the chain head.
                     // Re-processing it is confusing for the wallet so just skip.
-                    log.warn("Saw duplicated block in main chain at height {}: {}",
-                            newBlock.getHeight(), newBlock.getHeader().getHash());
+					            TransactionOutputChanges txOutChanges = null;
+                txOutChanges = connectTransactions(storedPrev.getHeight() + 1, block);
+            StoredBlock newStoredBlock = addToBlockStore(storedPrev,
+                    block.transactions == null ? block : block.cloneAsHeader(), txOutChanges);
+            setChainHead(newStoredBlock);
+            log.debug("Chain is now {} blocks high, running listeners", newStoredBlock.getHeight());
+            informListenersForNewBlock(block, NewBlockType.BEST_CHAIN, filteredTxHashList, filteredTxn, newStoredBlock);
                     return;
                 }
                 if (splitPoint == null) {
@@ -840,6 +845,23 @@ public abstract class AbstractBlockChain {
      */
     private void checkDifficultyTransitions(StoredBlock storedPrev, Block nextBlock) throws BlockStoreException, VerificationException {
         checkState(lock.isHeldByCurrentThread());
+
+        int DiffMode = 1;
+        if (storedPrev.getHeight()+1 >= 451000) { DiffMode = 3; }
+        else if(storedPrev.getHeight()+1 >= 3600) { DiffMode = 2; }
+
+        if (DiffMode == 1) { checkDifficultyTransitions_V1(storedPrev, nextBlock); return; }
+        else if (DiffMode == 2) { AntiGravityWave(storedPrev, nextBlock); return;}
+        else if (DiffMode == 3) { AntiGravityWave2(storedPrev, nextBlock); return;}
+
+        AntiGravityWave2(storedPrev, nextBlock);
+
+        return;
+
+    }
+	
+    private void checkDifficultyTransitions_V1(StoredBlock storedPrev, Block nextBlock) throws BlockStoreException, VerificationException {
+        checkState(lock.isHeldByCurrentThread());
         Block prev = storedPrev.getHeader();
         
         // Is this supposed to be a difficulty transition point?
@@ -896,17 +918,169 @@ public abstract class AbstractBlockChain {
         }
 
         int accuracyBytes = (int) (nextBlock.getDifficultyTarget() >>> 24) - 3;
-        long receivedTargetCompact = nextBlock.getDifficultyTarget();
+        long receivedDifficultyCompact = nextBlock.getDifficultyTarget();
 
         // The calculated difficulty is to a higher precision than received, so reduce here.
         BigInteger mask = BigInteger.valueOf(0xFFFFFFL).shiftLeft(accuracyBytes * 8);
         newTarget = newTarget.and(mask);
-        long newTargetCompact = Utils.encodeCompactBits(newTarget);
+        long newDifficultyCompact = Utils.encodeCompactBits(newTarget);
 
-        if (newTargetCompact != receivedTargetCompact)
+        if (newDifficultyCompact != receivedDifficultyCompact)
             throw new VerificationException("Network provided difficulty bits do not match what was calculated: " +
-                    newTargetCompact + " vs " + receivedTargetCompact);
+                    newDifficultyCompact + " vs " + receivedDifficultyCompact);
     }
+	
+	private void AntiGravityWave(StoredBlock storedPrev, Block nextBlock) {
+        /* current difficulty formula, darkcoin - DarkGravity v3, written by Evan Duffield - evan@darkcoin.io */
+        StoredBlock BlockLastSolved = storedPrev;
+        StoredBlock BlockReading = storedPrev;
+        Block BlockCreating = nextBlock;
+        BlockCreating = BlockCreating;
+        long nActualTimespan = 0;
+        long LastBlockTime = 0;
+        long PastBlocksMin = 24;
+        long PastBlocksMax = 24;
+        long CountBlocks = 0;
+        BigInteger PastDifficultyAverage = BigInteger.ZERO;
+        BigInteger PastDifficultyAveragePrev = BigInteger.ZERO;
+
+        if (BlockLastSolved == null || BlockLastSolved.getHeight() == 0 || BlockLastSolved.getHeight() < PastBlocksMin) {
+            verifyDifficulty(params.getMaxTarget(), storedPrev, nextBlock);
+            return;
+        }
+
+        for (int i = 1; BlockReading != null && BlockReading.getHeight() > 0; i++) {
+            if (PastBlocksMax > 0 && i > PastBlocksMax) { break; }
+            CountBlocks++;
+
+            if(CountBlocks <= PastBlocksMin) {
+                if (CountBlocks == 1) { PastDifficultyAverage = BlockReading.getHeader().getDifficultyTargetAsInteger(); }
+                else { PastDifficultyAverage = ((PastDifficultyAveragePrev.multiply(BigInteger.valueOf(CountBlocks)).add(BlockReading.getHeader().getDifficultyTargetAsInteger()).divide(BigInteger.valueOf(CountBlocks + 1)))); }
+                PastDifficultyAveragePrev = PastDifficultyAverage;
+            }
+
+            if(LastBlockTime > 0){
+                long Diff = (LastBlockTime - BlockReading.getHeader().getTimeSeconds());
+                nActualTimespan += Diff;
+            }
+            LastBlockTime = BlockReading.getHeader().getTimeSeconds();
+
+            try {
+                StoredBlock BlockReadingPrev = blockStore.get(BlockReading.getHeader().getPrevBlockHash());
+                if (BlockReadingPrev == null)
+                {
+                    //assert(BlockReading); break;
+                    return;
+                }
+                BlockReading = BlockReadingPrev;
+            }
+            catch(BlockStoreException x)
+            {
+                return;
+            }
+        }
+
+        BigInteger bnNew= PastDifficultyAverage;
+
+        long nTargetTimespan = CountBlocks*params.TARGET_SPACING;//nTargetSpacing;
+
+        if (nActualTimespan < nTargetTimespan/3)
+            nActualTimespan = nTargetTimespan/3;
+        if (nActualTimespan > nTargetTimespan*3)
+            nActualTimespan = nTargetTimespan*3;
+
+        // Retarget
+        bnNew = bnNew.multiply(BigInteger.valueOf(nActualTimespan));
+        bnNew = bnNew.divide(BigInteger.valueOf(nTargetTimespan));
+        verifyDifficulty(bnNew, storedPrev, nextBlock);
+        
+    }
+	
+	private void AntiGravityWave2(StoredBlock storedPrev, Block nextBlock) {
+        /* current difficulty formula, darkcoin - DarkGravity v3, written by Evan Duffield - evan@darkcoin.io */
+        StoredBlock BlockLastSolved = storedPrev;
+        StoredBlock BlockReading = storedPrev;
+        Block BlockCreating = nextBlock;
+        BlockCreating = BlockCreating;
+        long nActualTimespan = 0;
+        long LastBlockTime = 0;
+        long PastBlocksMin = 72;
+        long PastBlocksMax = 72;
+        long CountBlocks = 0;
+        BigInteger PastDifficultyAverage = BigInteger.ZERO;
+        BigInteger PastDifficultyAveragePrev = BigInteger.ZERO;
+
+        if (BlockLastSolved == null || BlockLastSolved.getHeight() == 0 || BlockLastSolved.getHeight() < PastBlocksMin) {
+            verifyDifficulty(params.getMaxTarget(), storedPrev, nextBlock);
+            return;
+        }
+
+        for (int i = 1; BlockReading != null && BlockReading.getHeight() > 0; i++) {
+            if (PastBlocksMax > 0 && i > PastBlocksMax) { break; }
+            CountBlocks++;
+
+            if(CountBlocks <= PastBlocksMin) {
+                if (CountBlocks == 1) { PastDifficultyAverage = BlockReading.getHeader().getDifficultyTargetAsInteger(); }
+                else { PastDifficultyAverage = ((PastDifficultyAveragePrev.multiply(BigInteger.valueOf(CountBlocks)).add(BlockReading.getHeader().getDifficultyTargetAsInteger()).divide(BigInteger.valueOf(CountBlocks + 1)))); }
+                PastDifficultyAveragePrev = PastDifficultyAverage;
+            }
+
+            if(LastBlockTime > 0){
+                long Diff = (LastBlockTime - BlockReading.getHeader().getTimeSeconds());
+                nActualTimespan += Diff;
+            }
+            LastBlockTime = BlockReading.getHeader().getTimeSeconds();
+
+            try {
+                StoredBlock BlockReadingPrev = blockStore.get(BlockReading.getHeader().getPrevBlockHash());
+                if (BlockReadingPrev == null)
+                {
+                    //assert(BlockReading); break;
+                    return;
+                }
+                BlockReading = BlockReadingPrev;
+            }
+            catch(BlockStoreException x)
+            {
+                return;
+            }
+        }
+
+        BigInteger bnNew= PastDifficultyAverage;
+
+		CountBlocks--;
+		
+        long nTargetTimespan = CountBlocks*params.TARGET_SPACING;//nTargetSpacing;
+
+        if (nActualTimespan < nTargetTimespan/2)
+            nActualTimespan = nTargetTimespan/2;
+        if (nActualTimespan > nTargetTimespan*2)
+            nActualTimespan = nTargetTimespan*2;
+
+        // Retarget
+        bnNew = bnNew.multiply(BigInteger.valueOf(nActualTimespan));
+        bnNew = bnNew.divide(BigInteger.valueOf(nTargetTimespan));
+        verifyDifficulty(bnNew, storedPrev, nextBlock);
+        
+    }
+	
+	private void verifyDifficulty(BigInteger calcDiff, StoredBlock storedPrev, Block nextBlock)
+    {
+        if (calcDiff.compareTo(params.getMaxTarget()) > 0) {
+            log.info("Difficulty hit proof of work limit: {}", calcDiff.toString(16));
+            calcDiff = params.getMaxTarget();
+        }
+        int accuracyBytes = (int) (nextBlock.getDifficultyTarget() >>> 24) - 3;
+        BigInteger receivedDifficulty = nextBlock.getDifficultyTargetAsInteger();
+
+        // The calculated difficulty is to a higher precision than received, so reduce here.
+        BigInteger mask = BigInteger.valueOf(0xFFFFFFL).shiftLeft(accuracyBytes * 8);
+        calcDiff = calcDiff.and(mask);
+
+        if (calcDiff.compareTo(receivedDifficulty) != 0)
+            throw new VerificationException("Network provided difficulty bits do not match what was calculated: " +
+                    receivedDifficulty.toString(16) + " vs " + calcDiff.toString(16));
+    }	
 
     private void checkTestnetDifficulty(StoredBlock storedPrev, Block prev, Block next) throws VerificationException, BlockStoreException {
         checkState(lock.isHeldByCurrentThread());

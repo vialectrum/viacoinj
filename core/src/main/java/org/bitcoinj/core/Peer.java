@@ -396,8 +396,6 @@ public class Peer extends PeerSocketHandler {
                 utxosFuture = null;
                 future.set((UTXOsMessage)m);
             }
-        } else if (m instanceof RejectMessage) {
-            log.error("Received Message {}", m);
         } else {
             log.warn("Received unhandled message: {}", m);
         }

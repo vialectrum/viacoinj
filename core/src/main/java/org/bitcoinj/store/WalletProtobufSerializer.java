@@ -205,6 +205,8 @@ public class WalletProtobufSerializer {
             walletBuilder.addTransactionSigners(protoSigner);
         }
 
+        walletBuilder.setSigsRequiredToSpend(wallet.getSigsRequiredToSpend());
+
         // Populate the wallet version.
         walletBuilder.setVersion(wallet.getVersion());
 
@@ -346,7 +348,8 @@ public class WalletProtobufSerializer {
             }
         }
 
-        for (PeerAddress address : confidence.getBroadcastBy()) {
+        for (ListIterator<PeerAddress> it = confidence.getBroadcastBy(); it.hasNext();) {
+            PeerAddress address = it.next();
             Protos.PeerAddress proto = Protos.PeerAddress.newBuilder()
                     .setIpAddress(ByteString.copyFrom(address.getAddr().getAddress()))
                     .setPort(address.getPort())
@@ -409,14 +412,16 @@ public class WalletProtobufSerializer {
         if (!walletProto.getNetworkIdentifier().equals(params.getId()))
             throw new UnreadableWalletException.WrongNetwork();
 
+        int sigsRequiredToSpend = walletProto.getSigsRequiredToSpend();
+
         // Read the scrypt parameters that specify how encryption and decryption is performed.
         KeyChainGroup chain;
         if (walletProto.hasEncryptionParameters()) {
             Protos.ScryptParameters encryptionParameters = walletProto.getEncryptionParameters();
             final KeyCrypterScrypt keyCrypter = new KeyCrypterScrypt(encryptionParameters);
-            chain = KeyChainGroup.fromProtobufEncrypted(params, walletProto.getKeyList(), keyCrypter);
+            chain = KeyChainGroup.fromProtobufEncrypted(params, walletProto.getKeyList(), sigsRequiredToSpend, keyCrypter);
         } else {
-            chain = KeyChainGroup.fromProtobufUnencrypted(params, walletProto.getKeyList());
+            chain = KeyChainGroup.fromProtobufUnencrypted(params, walletProto.getKeyList(), sigsRequiredToSpend);
         }
         Wallet wallet = factory.create(params, chain);
 
@@ -515,14 +520,13 @@ public class WalletProtobufSerializer {
             } else {
                 log.info("Loading wallet extension {}", id);
                 try {
-                    wallet.deserializeExtension(extension, extProto.getData().toByteArray());
+                    extension.deserializeWalletExtension(wallet, extProto.getData().toByteArray());
+                    wallet.addOrGetExistingExtension(extension);
                 } catch (Exception e) {
-                    if (extProto.getMandatory() && requireMandatoryExtensions) {
-                        log.error("Error whilst reading extension {}, failing to read wallet", id, e);
+                    if (extProto.getMandatory() && requireMandatoryExtensions)
                         throw new UnreadableWalletException("Could not parse mandatory extension in wallet: " + id);
-                    } else {
+                    else
                         log.error("Error whilst reading extension {}, ignoring", id, e);
-                    }
                 }
             }
         }

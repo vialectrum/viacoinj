@@ -44,9 +44,9 @@ public abstract class AbstractFullPrunedBlockChainTest
 {
     private static final Logger log = LoggerFactory.getLogger(AbstractFullPrunedBlockChainTest.class);
 
-    protected NetworkParameters params;
-    protected FullPrunedBlockChain chain;
-    protected FullPrunedBlockStore store;
+    private NetworkParameters params;
+    private FullPrunedBlockChain chain;
+    private FullPrunedBlockStore store;
 
     @Before
     public void setUp() throws Exception {

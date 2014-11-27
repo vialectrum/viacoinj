@@ -25,12 +25,14 @@ import com.google.common.io.BaseEncoding;
 import com.google.common.io.Resources;
 import com.google.common.primitives.Ints;
 import com.google.common.primitives.UnsignedLongs;
+import com.lambdaworks.crypto.SCrypt;
+
 import org.spongycastle.crypto.digests.RIPEMD160Digest;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URL;
 import java.security.MessageDigest;
@@ -58,8 +60,28 @@ public class Utils {
     }
 
     /** The string that prefixes all text messages signed using Bitcoin keys. */
-    public static final String BITCOIN_SIGNED_MESSAGE_HEADER = "Bitcoin Signed Message:\n";
+    public static final String BITCOIN_SIGNED_MESSAGE_HEADER = CoinDefinition.coinName + " Signed Message:\n";
     public static final byte[] BITCOIN_SIGNED_MESSAGE_HEADER_BYTES = BITCOIN_SIGNED_MESSAGE_HEADER.getBytes(Charsets.UTF_8);
+	
+	    // TODO: Replace this nanocoins business with something better.
+
+    /**
+     * How many "nanocoins" there are in a Bitcoin.
+     * <p/>
+     * A nanocoin is the smallest unit that can be transferred using Bitcoin.
+     * The term nanocoin is very misleading, though, because there are only 100 million
+     * of them in a coin (whereas one would expect 1 billion.
+     */
+    public static final BigInteger COIN = new BigInteger("100000000", 10);
+
+    /**
+     * How many "nanocoins" there are in 0.01 BitCoins.
+     * <p/>
+     * A nanocoin is the smallest unit that can be transferred using Bitcoin.
+     * The term nanocoin is very misleading, though, because there are only 100 million
+     * of them in a coin (whereas one would expect 1 billion).
+     */
+    public static final BigInteger CENT = new BigInteger("1000000", 10);
 
     private static BlockingQueue<Boolean> mockSleepQueue;
 
@@ -144,6 +166,14 @@ public class Utils {
      */
     public static byte[] doubleDigest(byte[] input) {
         return doubleDigest(input, 0, input.length);
+    }
+	
+	public static byte[] scryptDigest(byte[] input) {
+        try {
+            return SCrypt.scrypt(input, input, 1024, 1, 1, 32);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
@@ -603,22 +633,4 @@ public class Utils {
         return Joiner.on('\n').join(lines);
     }
 
-    // Can't use Closeable here because it's Java 7 only and Android devices only got that with KitKat.
-    public static InputStream closeUnchecked(InputStream stream) {
-        try {
-            stream.close();
-            return stream;
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static OutputStream closeUnchecked(OutputStream stream) {
-        try {
-            stream.close();
-            return stream;
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
 }

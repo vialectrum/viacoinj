@@ -298,7 +298,9 @@ public class DeterministicKey extends ECKey {
     }
 
     /**
-     * Derives a child at the given index (note: not the "i" value).
+     * Derives a child at the given index using hardened derivation.  Note: <code>index</code> is
+     * not the "i" value.  If you want the softened derivation, then use instead
+     * <code>HDKeyDerivation.deriveChildKey(this, new ChildNumber(child, false))</code>.
      */
     public DeterministicKey derive(int child) {
         return HDKeyDerivation.deriveChildKey(this, new ChildNumber(child, true));
@@ -352,15 +354,6 @@ public class DeterministicKey extends ECKey {
         return Base58.encode(addChecksum(ser));
     }
 
-    /** Deserialize a base-58-encoded HD Key with no parent */
-    public static DeterministicKey deserializeB58(String base58) {
-        return deserializeB58(null, base58);
-    }
-
-    /**
-      * Deserialize a base-58-encoded HD Key.
-      *  @param parent The parent node in the given key's deterministic hierarchy.
-      */
     public static DeterministicKey deserializeB58(@Nullable DeterministicKey parent, String base58) {
         try {
             return deserialize(parent, Base58.decodeChecked(base58));
@@ -369,17 +362,6 @@ public class DeterministicKey extends ECKey {
         }
     }
 
-    /**
-      * Deserialize an HD Key with no parent
-      */
-    public static DeterministicKey deserialize(byte[] serializedKey) {
-        return deserialize(null, serializedKey);
-    }
-
-    /**
-      * Deserialize an HD Key.
-      *  @param parent The parent node in the given key's deterministic hierarchy.
-      */
     public static DeterministicKey deserialize(@Nullable DeterministicKey parent, byte[] serializedKey) {
         ByteBuffer buffer = ByteBuffer.wrap(serializedKey);
         int header = buffer.getInt();
@@ -401,13 +383,17 @@ public class DeterministicKey extends ECKey {
             if (path.size() != depth)
                 throw new IllegalArgumentException("Depth does not match");
         } else {
-            if (depth >= 1)
-                // We have been given a key that is not a root key, yet we lack any object representing the parent.
-                // This can happen when deserializing an account key for a watching wallet. In this case, we assume that
-                // the client wants to conceal the key's position in the hierarchy. The parent is deemed to be the
-                // root of the hierarchy.
+            if (depth == 0) {
+                path = ImmutableList.of();
+            } else if (depth == 1) {
+                // We have been given a key that is not a root key, yet we also don't have any object representing
+                // the parent. This can happen when deserializing an account key for a watching wallet. In this case,
+                // we assume that the parent has a path of zero.
                 path = ImmutableList.of(childNumber);
-            else path = ImmutableList.of();
+            } else {
+                throw new IllegalArgumentException("Depth is " + depth + " and no parent key was provided, so we " +
+                                                   "cannot reconstruct the key path from the provided data.");
+            }
         }
         byte[] chainCode = new byte[32];
         buffer.get(chainCode);
@@ -467,23 +453,5 @@ public class DeterministicKey extends ECKey {
         if (creationTimeSeconds > 0)
             helper.add("creationTimeSeconds", creationTimeSeconds);
         return helper.toString();
-    }
-
-    @Override
-    public void formatKeyWithAddress(boolean includePrivateKeys, StringBuilder builder, NetworkParameters params) {
-        final Address address = toAddress(params);
-        builder.append("  addr:");
-        builder.append(address.toString());
-        builder.append("  hash160:");
-        builder.append(Utils.HEX.encode(getPubKeyHash()));
-        builder.append("  (");
-        builder.append(getPathAsString());
-        builder.append(")");
-        builder.append("\n");
-        if (includePrivateKeys) {
-            builder.append("  ");
-            builder.append(toStringWithPrivate(params));
-            builder.append("\n");
-        }
     }
 }

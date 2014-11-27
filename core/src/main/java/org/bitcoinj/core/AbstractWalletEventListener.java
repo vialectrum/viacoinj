@@ -51,7 +51,7 @@ public abstract class AbstractWalletEventListener extends AbstractKeyChainEventL
     }
 
     @Override
-    public void onScriptsChanged(Wallet wallet, List<Script> scripts, boolean isAddingScripts) {
+    public void onScriptsAdded(Wallet wallet, List<Script> scripts) {
         onChange();
     }
 

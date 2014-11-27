@@ -73,9 +73,7 @@ public class ExamplePaymentChannelClient {
                 // The StoredPaymentChannelClientStates object is responsible for, amongst other things, broadcasting
                 // the refund transaction if its lock time has expired. It also persists channels so we can resume them
                 // after a restart.
-                // We should not send a PeerGroup in the StoredPaymentChannelClientStates constructor
-                // since WalletAppKit will find it for us.
-                return ImmutableList.<WalletExtension>of(new StoredPaymentChannelClientStates(null));
+                return ImmutableList.<WalletExtension>of(new StoredPaymentChannelClientStates(null, peerGroup()));
             }
         };
         appKit.connectToLocalHost();

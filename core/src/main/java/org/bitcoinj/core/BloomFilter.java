@@ -339,17 +339,7 @@ public class BloomFilter extends Message {
                 }
             }
         }
-        if (found) return true;
-        for (TransactionInput input : tx.getInputs()) {
-            if (contains(input.getOutpoint().bitcoinSerialize())) {
-                return true;
-            }
-            for (ScriptChunk chunk : input.getScriptSig().getChunks()) {
-                if (chunk.isPushData() && contains(chunk.data))
-                    return true;
-            }
-        }
-        return false;
+        return found;
     }
     
     @Override

@@ -121,6 +121,8 @@ public class BitcoindComparisonTool {
             }
         }, Threading.SAME_THREAD);
         peers.addPeerFilterProvider(new PeerFilterProvider() {
+            private final Lock lock = Threading.lock("pfp");
+
             @Override public long getEarliestKeyCreationTime() {
                 return Long.MAX_VALUE;
             }
@@ -135,11 +137,8 @@ public class BitcoindComparisonTool {
             }
 
             @Override
-            public void beginBloomFilterCalculation() {
-            }
-
-            @Override
-            public void endBloomFilterCalculation() {
+            public Lock getLock() {
+                return lock;
             }
 
             @Override public BloomFilter getBloomFilter(int size, double falsePositiveRate, long nTweak) {

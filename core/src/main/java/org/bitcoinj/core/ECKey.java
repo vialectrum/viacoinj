@@ -1117,36 +1117,23 @@ public class ECKey implements EncryptableItem, Serializable {
 
     @Override
     public String toString() {
-        return toString(false, null);
+        return toString(false);
     }
 
     /**
      * Produce a string rendering of the ECKey INCLUDING the private key.
      * Unless you absolutely need the private key it is better for security reasons to just use {@link #toString()}.
      */
-    public String toStringWithPrivate(NetworkParameters params) {
-        return toString(true, params);
+    public String toStringWithPrivate() {
+        return toString(true);
     }
 
-    public String getPrivateKeyAsHex() {
-        return Utils.HEX.encode(getPrivKeyBytes());
-    }
-
-    public String getPublicKeyAsHex() {
-        return Utils.HEX.encode(pub.getEncoded());
-    }
-
-    public String getPrivateKeyAsWiF(NetworkParameters params) {
-        return getPrivateKeyEncoded(params).toString();
-    }
-
-    private String toString(boolean includePrivate, NetworkParameters params) {
+    private String toString(boolean includePrivate) {
         final ToStringHelper helper = Objects.toStringHelper(this).omitNullValues();
-        helper.add("pub HEX", getPublicKeyAsHex());
+        helper.add("pub", Utils.HEX.encode(pub.getEncoded()));
         if (includePrivate) {
             try {
-                helper.add("priv HEX", getPrivateKeyAsHex());
-                helper.add("priv WIF", getPrivateKeyAsWiF(params));
+                helper.add("priv", Utils.HEX.encode(getPrivKey().toByteArray()));
             } catch (IllegalStateException e) {
                 // TODO: Make hasPrivKey() work for deterministic keys and fix this.
             }
@@ -1158,19 +1145,5 @@ public class ECKey implements EncryptableItem, Serializable {
             helper.add("encryptedPrivateKey", encryptedPrivateKey);
         helper.add("isEncrypted", isEncrypted());
         return helper.toString();
-    }
-
-    public void formatKeyWithAddress(boolean includePrivateKeys, StringBuilder builder, NetworkParameters params) {
-        final Address address = toAddress(params);
-        builder.append("  addr:");
-        builder.append(address.toString());
-        builder.append("  hash160:");
-        builder.append(Utils.HEX.encode(getPubKeyHash()));
-        builder.append("\n");
-        if (includePrivateKeys) {
-            builder.append("  ");
-            builder.append(toStringWithPrivate(params));
-            builder.append("\n");
-        }
     }
 }

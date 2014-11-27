@@ -17,17 +17,6 @@
 
 package org.bitcoinj.core;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
-import com.google.common.net.InetAddresses;
-import com.google.common.primitives.Ints;
-import com.google.common.primitives.Longs;
-import com.google.common.util.concurrent.*;
-import com.subgraph.orchid.TorClient;
-import net.jcip.annotations.GuardedBy;
 import org.bitcoinj.crypto.DRMWorkaround;
 import org.bitcoinj.net.BlockingClientManager;
 import org.bitcoinj.net.ClientConnectionManager;
@@ -40,12 +29,26 @@ import org.bitcoinj.script.Script;
 import org.bitcoinj.utils.ExponentialBackoff;
 import org.bitcoinj.utils.ListenerRegistration;
 import org.bitcoinj.utils.Threading;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
+import com.google.common.net.InetAddresses;
+import com.google.common.primitives.Ints;
+import com.google.common.primitives.Longs;
+import com.google.common.util.concurrent.*;
+import com.subgraph.orchid.TorClient;
+import net.jcip.annotations.GuardedBy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
-import java.net.*;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.NoRouteToHostException;
+import java.net.Socket;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
@@ -80,7 +83,6 @@ public class PeerGroup extends AbstractExecutionThreadService implements Transac
     private static final Logger log = LoggerFactory.getLogger(PeerGroup.class);
     private static final int DEFAULT_CONNECTIONS = 4;
     private static final int TOR_TIMEOUT_SECONDS = 60;
-    private int maxPeersToDiscoverCount = 100;
 
     protected final ReentrantLock lock = Threading.lock("peergroup");
 
@@ -114,7 +116,7 @@ public class PeerGroup extends AbstractExecutionThreadService implements Transac
     // until we reach this count.
     @GuardedBy("lock") private int maxConnections;
     // Minimum protocol version we will allow ourselves to connect to: require Bloom filtering.
-    private volatile int vMinRequiredProtocolVersion = FilteredBlock.MIN_PROTOCOL_VERSION;
+    private volatile int vMinRequiredProtocolVersion = CoinDefinition.MIN_PROTOCOL_VERSION;//FilteredBlock.MIN_PROTOCOL_VERSION;  //Will this break the bloomfiltering in other coin apps?
 
     // Runs a background thread that we use for scheduling pings to our peers, so we can measure their performance
     // and network latency. We ping peers every pingIntervalMsec milliseconds.
@@ -153,7 +155,7 @@ public class PeerGroup extends AbstractExecutionThreadService implements Transac
         }
     };
 
-    private int minBroadcastConnections = 0;
+    private int minBroadcastConnections = CoinDefinition.minBroadcastConnections;
     private final AbstractWalletEventListener walletEventListener = new AbstractWalletEventListener() {
         // Because calculation of the new filter takes place asynchronously, these flags deduplicate requests.
         @GuardedBy("this") private boolean sendIfChangedQueued, dontSendQueued;
@@ -191,7 +193,7 @@ public class PeerGroup extends AbstractExecutionThreadService implements Transac
             }
         }
 
-        @Override public void onScriptsChanged(Wallet wallet, List<Script> scripts, boolean isAddingScripts) {
+        @Override public void onScriptsAdded(Wallet wallet, List<Script> scripts) {
             queueRecalc(true);
         }
 
@@ -565,10 +567,6 @@ public class PeerGroup extends AbstractExecutionThreadService implements Transac
      */
     public void addEventListener(PeerEventListener listener, Executor executor) {
         peerEventListeners.add(new ListenerRegistration<PeerEventListener>(checkNotNull(listener), executor));
-        for (Peer peer : getConnectedPeers())
-            peer.addEventListener(listener, executor);
-        for (Peer peer: getPendingPeers())
-            peer.addEventListener(listener, executor);
     }
 
     /**
@@ -581,12 +579,7 @@ public class PeerGroup extends AbstractExecutionThreadService implements Transac
 
     /** The given event listener will no longer be called with events. */
     public boolean removeEventListener(PeerEventListener listener) {
-        boolean result = ListenerRegistration.removeFromList(listener, peerEventListeners);
-        for (Peer peer : getConnectedPeers())
-            peer.removeEventListener(listener);
-        for (Peer peer : getPendingPeers())
-            peer.removeEventListener(listener);
-        return result;
+        return ListenerRegistration.removeFromList(listener, peerEventListeners);
     }
 
     /**
@@ -685,24 +678,14 @@ public class PeerGroup extends AbstractExecutionThreadService implements Transac
                 lock.lock();
             }
             for (InetSocketAddress address : addresses) addressList.add(new PeerAddress(address));
-            if (addressList.size() >= maxPeersToDiscoverCount) break;
+            if (addressList.size() > 0) break;
         }
         for (PeerAddress address : addressList) {
             addInactive(address);
         }
 
-        final ImmutableSet<PeerAddress> peersDiscoveredSet = ImmutableSet.copyOf(addressList);
-        for (final ListenerRegistration<PeerEventListener> registration : peerEventListeners) {
-            registration.executor.execute(new Runnable() {
-                @Override
-                public void run() {
-                    registration.listener.onPeersDiscovered(peersDiscoveredSet);
-                }
-            });
-        }
-
-        log.info("Peer discovery took {}msec and returned {} items",
-                System.currentTimeMillis() - start, addressList.size());
+        //log.info("Peer discovery took {}msec and returned {} items",
+                //System.currentTimeMillis() - start, addressList.size());
     }
 
     @Override
@@ -911,15 +894,7 @@ public class PeerGroup extends AbstractExecutionThreadService implements Transac
         try {
             checkNotNull(provider);
             checkState(!peerFilterProviders.contains(provider));
-            // Insert provider at the start. This avoids various concurrency problems that could occur because we need
-            // all providers to be in a consistent, unchanging state whilst the filter is built. Providers can give
-            // this guarantee by taking a lock in their begin method, but if we add to the end of the list here, it
-            // means we establish a lock ordering a > b > c if that's the order the providers were added in. Given that
-            // the main wallet will usually be first, this establishes an ordering wallet > other-provider, which means
-            // other-provider can then not call into the wallet itself. Other providers installed by the API user should
-            // come first so the expected ordering is preserved. This can also manifest itself in providers that use
-            // synchronous RPCs into an actor instead of locking, but the same issue applies.
-            peerFilterProviders.add(0, provider);
+            peerFilterProviders.add(provider);
 
             // Don't bother downloading block bodies before the oldest keys in all our wallets. Make sure we recalculate
             // if a key is added. Of course, by then we may have downloaded the chain already. Ideally adding keys would
@@ -1707,24 +1682,6 @@ public class PeerGroup extends AbstractExecutionThreadService implements Transac
     @Nullable
     public TorClient getTorClient() {
         return torClient;
-    }
-
-    /**
-     * Returns the maximum number of {@link Peer}s to discover. This maximum is checked after
-     * each {@link PeerDiscovery} so this max number can be surpassed.
-     * @return the maximum number of peers to discover
-     */
-    public int getMaxPeersToDiscoverCount() {
-        return maxPeersToDiscoverCount;
-    }
-
-    /**
-     * Sets the maximum number of {@link Peer}s to discover. This maximum is checked after
-     * each {@link PeerDiscovery} so this max number can be surpassed.
-     * @param maxPeersToDiscoverCount the maximum number of peers to discover
-     */
-    public void setMaxPeersToDiscoverCount(int maxPeersToDiscoverCount) {
-        this.maxPeersToDiscoverCount = maxPeersToDiscoverCount;
     }
 
     /** See {@link #setUseLocalhostPeerWhenPossible(boolean)} */

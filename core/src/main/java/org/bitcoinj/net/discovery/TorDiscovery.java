@@ -34,7 +34,6 @@ import com.subgraph.orchid.circuits.path.CircuitPathChooser;
 import com.subgraph.orchid.data.HexDigest;
 import com.subgraph.orchid.data.exitpolicy.ExitTarget;
 
-import org.bitcoinj.utils.DaemonThreadFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -253,8 +252,8 @@ public class TorDiscovery implements PeerDiscovery {
     }
 
     private synchronized void createThreadPool(int size) {
-        threadPool = MoreExecutors.listeningDecorator(
-                Executors.newFixedThreadPool(size, new DaemonThreadFactory()));
+        threadPool =
+                MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(size));
     }
 
     private InetAddress lookup(Circuit circuit, String seed) throws UnknownHostException {
