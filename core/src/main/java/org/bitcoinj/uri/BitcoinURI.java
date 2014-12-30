@@ -1,19 +1,17 @@
 /*
  * Copyright 2012, 2014 the original author or authors.
  * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.bitcoinj.uri;
@@ -22,7 +20,6 @@ import org.bitcoinj.core.Address;
 import org.bitcoinj.core.AddressFormatException;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.NetworkParameters;
-import org.bitcoinj.core.CoinDefinition;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,7 +91,7 @@ public class BitcoinURI {
     public static final String FIELD_ADDRESS = "address";
     public static final String FIELD_PAYMENT_REQUEST_URL = "r";
 
-    public static final String BITCOIN_SCHEME = CoinDefinition.coinURIScheme;
+    public static final String BITCOIN_SCHEME = "bitcoin";
     private static final String ENCODED_SPACE_CHARACTER = "%20";
     private static final String AMPERSAND_SEPARATOR = "&";
     private static final String QUESTION_MARK_SEPARATOR = "?";
@@ -156,7 +153,7 @@ public class BitcoinURI {
         // Split off the address from the rest of the query parameters.
         String[] addressSplitTokens = schemeSpecificPart.split("\\?", 2);
         if (addressSplitTokens.length == 0)
-            throw new BitcoinURIParseException("No data found after the "+CoinDefinition.coinName +": prefix");
+            throw new BitcoinURIParseException("No data found after the bitcoin: prefix");
         String addressToken = addressSplitTokens[0];  // may be empty!
 
         String[] nameValuePairTokens;
@@ -196,10 +193,10 @@ public class BitcoinURI {
         for (String nameValuePairToken : nameValuePairTokens) {
             final int sepIndex = nameValuePairToken.indexOf('=');
             if (sepIndex == -1)
-                throw new BitcoinURIParseException("Malformed "+CoinDefinition.coinName +" URI - no separator in '" +
+                throw new BitcoinURIParseException("Malformed Bitcoin URI - no separator in '" +
                         nameValuePairToken + "'");
             if (sepIndex == 0)
-                throw new BitcoinURIParseException("Malformed "+CoinDefinition.coinName +" URI - empty name '" +
+                throw new BitcoinURIParseException("Malformed Bitcoin URI - empty name '" +
                         nameValuePairToken + "'");
             final String nameToken = nameValuePairToken.substring(0, sepIndex).toLowerCase(Locale.ENGLISH);
             final String valueToken = nameValuePairToken.substring(sepIndex + 1);
@@ -264,7 +261,7 @@ public class BitcoinURI {
 
     /**
      * @return The amount name encoded using a pure integer value based at
-     *         10,000,000 units is 1 BTC. May be null if no amount is specified
+     *         10,000,000 units is 1 VIA. May be null if no amount is specified
      */
     public Coin getAmount() {
         return (Coin) parameterMap.get(FIELD_AMOUNT);

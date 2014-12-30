@@ -19,7 +19,7 @@ public class CoinDefinition {
     public static final String coinTicker = "VIA";
     public static final String coinURIScheme = "viacoin";
     public static final String cryptsyMarketId = "261";
-    public static final String cryptsyMarketCurrency = "BTC";
+    public static final String cryptsyMarketCurrency = "VIA";
     public static final String PATTERN_PRIVATE_KEY_START = "6";
 
     public enum CoinPrecision {

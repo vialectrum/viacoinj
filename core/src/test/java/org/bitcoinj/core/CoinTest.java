@@ -39,7 +39,9 @@ public class CoinTest {
         try {
             parseCoin("2E-20");
             org.junit.Assert.fail("should not have accepted fractional satoshis");
-        } catch (ArithmeticException e) {
+        } catch (IllegalArgumentException expected) {
+        } catch (Exception e) {
+            org.junit.Assert.fail("should throw IllegalArgumentException");
         }
     }
 
@@ -99,10 +101,10 @@ public class CoinTest {
 
     @Test
     public void testToFriendlyString() {
-        assertEquals("1.00 BTC", COIN.toFriendlyString());
-        assertEquals("1.23 BTC", valueOf(1, 23).toFriendlyString());
-        assertEquals("0.001 BTC", COIN.divide(1000).toFriendlyString());
-        assertEquals("-1.23 BTC", valueOf(1, 23).negate().toFriendlyString());
+        assertEquals("1.00 VIA", COIN.toFriendlyString());
+        assertEquals("1.23 VIA", valueOf(1, 23).toFriendlyString());
+        assertEquals("0.001 VIA", COIN.divide(1000).toFriendlyString());
+        assertEquals("-1.23 VIA", valueOf(1, 23).negate().toFriendlyString());
     }
 
     /**

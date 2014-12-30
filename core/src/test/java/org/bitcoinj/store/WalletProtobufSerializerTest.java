@@ -25,12 +25,14 @@ import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.params.UnitTestParams;
 import org.bitcoinj.script.ScriptBuilder;
 import org.bitcoinj.testing.FakeTxBuilder;
+import org.bitcoinj.testing.FooWalletExtension;
 import org.bitcoinj.utils.BriefLogFormatter;
 import org.bitcoinj.utils.Threading;
 import org.bitcoinj.wallet.DeterministicKeyChain;
 import org.bitcoinj.wallet.KeyChain;
-import com.google.common.collect.ImmutableList;
 import com.google.protobuf.ByteString;
+
+import org.bitcoinj.wallet.MarriedKeyChain;
 import org.bitcoinj.wallet.Protos;
 import org.junit.Before;
 import org.junit.Test;
@@ -287,16 +289,20 @@ public class WalletProtobufSerializerTest {
     public void testRoundTripMarriedWallet() throws Exception {
         // create 2-of-2 married wallet
         myWallet = new Wallet(params);
-        final DeterministicKeyChain keyChain = new DeterministicKeyChain(new SecureRandom());
-        DeterministicKey partnerKey = DeterministicKey.deserializeB58(null, keyChain.getWatchingKey().serializePubB58());
+        final DeterministicKeyChain partnerChain = new DeterministicKeyChain(new SecureRandom());
+        DeterministicKey partnerKey = DeterministicKey.deserializeB58(null, partnerChain.getWatchingKey().serializePubB58(params), params);
+        MarriedKeyChain chain = MarriedKeyChain.builder()
+                .random(new SecureRandom())
+                .followingKeys(partnerKey)
+                .threshold(2).build();
+        myWallet.addAndActivateHDChain(chain);
 
-        myWallet.addFollowingAccountKeys(ImmutableList.of(partnerKey), 2);
         myAddress = myWallet.currentAddress(KeyChain.KeyPurpose.RECEIVE_FUNDS);
 
         Wallet wallet1 = roundTrip(myWallet);
         assertEquals(0, wallet1.getTransactions(true).size());
         assertEquals(Coin.ZERO, wallet1.getBalance());
-        assertEquals(2, wallet1.getSigsRequiredToSpend());
+        assertEquals(2, wallet1.getActiveKeychain().getSigsRequiredToSpend());
         assertEquals(myAddress, wallet1.currentAddress(KeyChain.KeyPurpose.RECEIVE_FUNDS));
     }
 
@@ -326,7 +332,7 @@ public class WalletProtobufSerializerTest {
 
     @Test
     public void testExtensions() throws Exception {
-        myWallet.addExtension(new SomeFooExtension("com.whatever.required", true));
+        myWallet.addExtension(new FooWalletExtension("com.whatever.required", true));
         Protos.Wallet proto = new WalletProtobufSerializer().walletToProto(myWallet);
         // Initial extension is mandatory: try to read it back into a wallet that doesn't know about it.
         try {
@@ -336,13 +342,13 @@ public class WalletProtobufSerializerTest {
             assertTrue(e.getMessage().contains("mandatory"));
         }
         Wallet wallet = new WalletProtobufSerializer().readWallet(params,
-                new WalletExtension[]{ new SomeFooExtension("com.whatever.required", true) },
+                new WalletExtension[]{ new FooWalletExtension("com.whatever.required", true) },
                 proto);
         assertTrue(wallet.getExtensions().containsKey("com.whatever.required"));
 
         // Non-mandatory extensions are ignored if the wallet doesn't know how to read them.
         Wallet wallet2 = new Wallet(params);
-        wallet2.addExtension(new SomeFooExtension("com.whatever.optional", false));
+        wallet2.addExtension(new FooWalletExtension("com.whatever.optional", false));
         Protos.Wallet proto2 = new WalletProtobufSerializer().walletToProto(wallet2);
         Wallet wallet5 = new WalletProtobufSerializer().readWallet(params, null, proto2);
         assertEquals(0, wallet5.getExtensions().size());
@@ -353,37 +359,5 @@ public class WalletProtobufSerializerTest {
         Protos.Wallet.Builder proto = Protos.Wallet.newBuilder(new WalletProtobufSerializer().walletToProto(myWallet));
         proto.setVersion(2);
         new WalletProtobufSerializer().readWallet(params, null, proto.build());
-    }
-
-    private static class SomeFooExtension implements WalletExtension {
-        private final byte[] data = new byte[]{1, 2, 3};
-
-        private final boolean isMandatory;
-        private final String id;
-
-        public SomeFooExtension(String id, boolean isMandatory) {
-            this.isMandatory = isMandatory;
-            this.id = id;
-        }
-
-        @Override
-        public String getWalletExtensionID() {
-            return id;
-        }
-
-        @Override
-        public boolean isWalletExtensionMandatory() {
-            return isMandatory;
-        }
-
-        @Override
-        public byte[] serializeWalletExtension() {
-            return data;
-        }
-
-        @Override
-        public void deserializeWalletExtension(Wallet wallet, byte[] data) {
-            assertArrayEquals(this.data, data);
-        }
     }
 }

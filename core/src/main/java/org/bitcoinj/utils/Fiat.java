@@ -81,8 +81,13 @@ public final class Fiat implements Monetary, Comparable<Fiat>, Serializable {
      *             if you try to specify fractional satoshis, or a value out of range.
      */
     public static Fiat parseFiat(final String currencyCode, final String str) {
-        return Fiat.valueOf(currencyCode, new BigDecimal(str).movePointRight(SMALLEST_UNIT_EXPONENT)
-                .toBigIntegerExact().longValue());
+        try {
+            long val = new BigDecimal(str).movePointRight(SMALLEST_UNIT_EXPONENT)
+                    .toBigIntegerExact().longValue();
+            return Fiat.valueOf(currencyCode, val);
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException(e);
+        }
     }
 
     public Fiat add(final Fiat value) {
@@ -182,8 +187,8 @@ public final class Fiat implements Monetary, Comparable<Fiat>, Serializable {
 
     /**
      * <p>
-     * Returns the value as a plain string denominated in BTC. The result is unformatted with no trailing zeroes. For
-     * instance, a value of 150000 satoshis gives an output string of "0.0015" BTC
+     * Returns the value as a plain string denominated in VIA. The result is unformatted with no trailing zeroes. For
+     * instance, a value of 150000 satoshis gives an output string of "0.0015" VIA
      * </p>
      */
     public String toPlainString() {

@@ -56,12 +56,12 @@ public final class Coin implements Monetary, Comparable<Coin>, Serializable {
     public static final Coin CENT = COIN.divide(100);
 
     /**
-     * 0.001 Bitcoins, also known as 1 mBTC.
+     * 0.001 Bitcoins, also known as 1 mVIA.
      */
     public static final Coin MILLICOIN = COIN.divide(1000);
 
     /**
-     * 0.000001 Bitcoins, also known as 1 µBTC or 1 uBTC.
+     * 0.000001 Bitcoins, also known as 1 µVIA or 1 uVIA.
      */
     public static final Coin MICROCOIN = MILLICOIN.divide(1000);
 
@@ -128,7 +128,12 @@ public final class Coin implements Monetary, Comparable<Coin>, Serializable {
      * @throws IllegalArgumentException if you try to specify fractional satoshis, or a value out of range.
      */
     public static Coin parseCoin(final String str) {
-        return Coin.valueOf(new BigDecimal(str).movePointRight(SMALLEST_UNIT_EXPONENT).toBigIntegerExact().longValue());
+        try {
+            long satoshis = new BigDecimal(str).movePointRight(SMALLEST_UNIT_EXPONENT).toBigIntegerExact().longValue();
+            return Coin.valueOf(satoshis);
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException(e); // Repackage exception to honor method contract
+        }
     }
 
     public Coin add(final Coin value) {
@@ -222,7 +227,7 @@ public final class Coin implements Monetary, Comparable<Coin>, Serializable {
         return this.value;
     }
 
-    private static final MonetaryFormat FRIENDLY_FORMAT = MonetaryFormat.BTC.minDecimals(2).repeatOptionalDecimals(1, 6).postfixCode();
+    private static final MonetaryFormat FRIENDLY_FORMAT = MonetaryFormat.VIA.minDecimals(2).repeatOptionalDecimals(1, 6).postfixCode();
 
     /**
      * Returns the value as a 0.12 type string. More digits after the decimal place will be used
@@ -232,13 +237,13 @@ public final class Coin implements Monetary, Comparable<Coin>, Serializable {
         return FRIENDLY_FORMAT.format(this).toString();
     }
 
-    private static final MonetaryFormat PLAIN_FORMAT = MonetaryFormat.BTC.minDecimals(0).repeatOptionalDecimals(1, 8).noCode();
+    private static final MonetaryFormat PLAIN_FORMAT = MonetaryFormat.VIA.minDecimals(0).repeatOptionalDecimals(1, 8).noCode();
 
     /**
      * <p>
-     * Returns the value as a plain string denominated in BTC.
+     * Returns the value as a plain string denominated in VIA.
      * The result is unformatted with no trailing zeroes.
-     * For instance, a value of 150000 satoshis gives an output string of "0.0015" BTC
+     * For instance, a value of 150000 satoshis gives an output string of "0.0015" VIA
      * </p>
      */
     public String toPlainString() {

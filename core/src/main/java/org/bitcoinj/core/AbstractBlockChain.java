@@ -86,6 +86,7 @@ public abstract class AbstractBlockChain {
 
     /** Keeps a map of block hashes to StoredBlocks. */
     private final BlockStore blockStore;
+    private final Context context;
 
     /**
      * Tracks the top of the best known chain.<p>
@@ -149,6 +150,11 @@ public abstract class AbstractBlockChain {
         this.params = params;
         this.listeners = new CopyOnWriteArrayList<ListenerRegistration<BlockChainListener>>();
         for (BlockChainListener l : listeners) addListener(l, Threading.SAME_THREAD);
+        context = new Context();
+    }
+
+    public Context getContext() {
+        return context;
     }
 
     /**
@@ -498,13 +504,8 @@ public abstract class AbstractBlockChain {
                     // newStoredBlock is a part of the same chain, there's no fork. This happens when we receive a block
                     // that we already saw and linked into the chain previously, which isn't the chain head.
                     // Re-processing it is confusing for the wallet so just skip.
-					            TransactionOutputChanges txOutChanges = null;
-                txOutChanges = connectTransactions(storedPrev.getHeight() + 1, block);
-            StoredBlock newStoredBlock = addToBlockStore(storedPrev,
-                    block.transactions == null ? block : block.cloneAsHeader(), txOutChanges);
-            setChainHead(newStoredBlock);
-            log.debug("Chain is now {} blocks high, running listeners", newStoredBlock.getHeight());
-            informListenersForNewBlock(block, NewBlockType.BEST_CHAIN, filteredTxHashList, filteredTxn, newStoredBlock);
+                    log.warn("Saw duplicated block in main chain at height {}: {}",
+                            newBlock.getHeight(), newBlock.getHeader().getHash());
                     return;
                 }
                 if (splitPoint == null) {

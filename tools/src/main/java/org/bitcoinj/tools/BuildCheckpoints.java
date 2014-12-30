@@ -62,17 +62,17 @@ public class BuildCheckpoints {
         final BlockStore store = new MemoryBlockStore(PARAMS);
         final BlockChain chain = new BlockChain(PARAMS, store);
         final PeerGroup peerGroup = new PeerGroup(PARAMS, chain);
-        peerGroup.addAddress(InetAddress.getByName("119.81.51.10"));
+        peerGroup.addAddress(InetAddress.getLocalHost());
         long now = new Date().getTime() / 1000;
         peerGroup.setFastCatchupTimeSecs(now);
 
-        final long oneMonthAgo = now - (1000 * 1);
+        final long oneMonthAgo = now - (86400 * 30);
 
         chain.addListener(new AbstractBlockChainListener() {
             @Override
             public void notifyNewBestBlock(StoredBlock block) throws VerificationException {
                 int height = block.getHeight();
-                if (height == 422897) {
+                if (height % PARAMS.getInterval() == 0 && block.getHeader().getTimeSeconds() <= oneMonthAgo) {
                     System.out.println(String.format("Checkpointing block %s at height %d",
                             block.getHeader().getHash(), block.getHeight()));
                     checkpoints.put(height, block);
@@ -80,8 +80,7 @@ public class BuildCheckpoints {
             }
         }, Threading.SAME_THREAD);
 
-        peerGroup.startAsync();
-        peerGroup.awaitRunning();
+        peerGroup.start();
         peerGroup.downloadBlockChain();
 
         checkState(checkpoints.size() > 0);
@@ -90,13 +89,12 @@ public class BuildCheckpoints {
         writeBinaryCheckpoints(checkpoints, PLAIN_CHECKPOINTS_FILE);
         writeTextualCheckpoints(checkpoints, TEXTUAL_CHECKPOINTS_FILE);
 
-        peerGroup.stopAsync();
-        peerGroup.awaitTerminated();
+        peerGroup.stop();
         store.close();
 
         // Sanity check the created files.
-        //sanityCheck(PLAIN_CHECKPOINTS_FILE, checkpoints.size());
-        //sanityCheck(TEXTUAL_CHECKPOINTS_FILE, checkpoints.size());
+        sanityCheck(PLAIN_CHECKPOINTS_FILE, checkpoints.size());
+        sanityCheck(TEXTUAL_CHECKPOINTS_FILE, checkpoints.size());
     }
 
     private static void writeBinaryCheckpoints(TreeMap<Integer, StoredBlock> checkpoints, File file) throws Exception {
@@ -138,20 +136,20 @@ public class BuildCheckpoints {
         System.out.println("Checkpoints written to '" + file.getCanonicalPath() + "'.");
     }
 
-    /*private static void sanityCheck(File file, int expectedSize) throws IOException {
+    private static void sanityCheck(File file, int expectedSize) throws IOException {
         CheckpointManager manager = new CheckpointManager(PARAMS, new FileInputStream(file));
         checkState(manager.numCheckpoints() == expectedSize);
 
         if (PARAMS.getId().equals(NetworkParameters.ID_MAINNET)) {
-            StoredBlock test = manager.getCheckpointBefore(1416368236); // Thu Jan 23 19:00:00 CET 2014
-            checkState(test.getHeight() == 422872);
+            StoredBlock test = manager.getCheckpointBefore(1390500000); // Thu Jan 23 19:00:00 CET 2014
+            checkState(test.getHeight() == 280224);
             checkState(test.getHeader().getHashAsString()
-                    .equals("b7b249ea58d8e5b85b7937e133e9cbb5d0c894570aa8961d7ce3fb802cac3334"));
+                    .equals("00000000000000000b5d59a15f831e1c45cb688a4db6b0a60054d49a9997fa34"));
         } else if (PARAMS.getId().equals(NetworkParameters.ID_TESTNET)) {
             StoredBlock test = manager.getCheckpointBefore(1390500000); // Thu Jan 23 19:00:00 CET 2014
             checkState(test.getHeight() == 167328);
             checkState(test.getHeader().getHashAsString()
                     .equals("0000000000035ae7d5025c2538067fe7adb1cf5d5d9c31b024137d9090ed13a9"));
         }
-    }*/
+    }
 }

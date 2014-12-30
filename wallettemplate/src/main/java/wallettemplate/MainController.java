@@ -1,7 +1,7 @@
 package wallettemplate;
 
 import org.bitcoinj.core.Coin;
-import org.bitcoinj.core.DownloadListener;
+import org.bitcoinj.core.DownloadProgressTracker;
 import org.bitcoinj.utils.MonetaryFormat;
 import com.subgraph.orchid.TorClient;
 import com.subgraph.orchid.TorInitializationListener;
@@ -45,7 +45,7 @@ public class MainController {
     public void onBitcoinSetup() {
         model.setWallet(bitcoin.wallet());
         addressControl.addressProperty().bind(model.addressProperty());
-        balance.textProperty().bind(EasyBind.map(model.balanceProperty(), coin -> MonetaryFormat.BTC.noCode().format(coin).toString()));
+        balance.textProperty().bind(EasyBind.map(model.balanceProperty(), coin -> MonetaryFormat.VIA.noCode().format(coin).toString()));
         // Don't let the user click send money when the wallet is empty.
         sendMoneyOutBtn.disableProperty().bind(model.balanceProperty().isEqualTo(Coin.ZERO));
 
@@ -121,7 +121,7 @@ public class MainController {
         group.play();
     }
 
-    public DownloadListener progressBarUpdater() {
-        return model.getDownloadListener();
+    public DownloadProgressTracker progressBarUpdater() {
+        return model.getDownloadProgressTracker();
     }
 }

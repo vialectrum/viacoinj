@@ -35,9 +35,12 @@ public class MainNetParams extends NetworkParameters {
         dumpedPrivateKeyHeader = 128 + CoinDefinition.AddressHeader;
         addressHeader = CoinDefinition.AddressHeader;
         p2shHeader = CoinDefinition.p2shHeader;
-        acceptableAddressCodes = new int[] { addressHeader, p2shHeader};
+        acceptableAddressCodes = new int[] { addressHeader, p2shHeader };
         port = 5223;
         packetMagic = CoinDefinition.PacketMagic;
+        bip32HeaderPub = 0x0488B21E; //The 4 byte header that serializes in base58 to "xpub".
+        bip32HeaderPriv = 0x0488ADE4; //The 4 byte header that serializes in base58 to "xprv"
+
         genesisBlock.setDifficultyTarget(0x1e01ffffL);
         genesisBlock.setTime(CoinDefinition.genesisBlockTime);
         genesisBlock.setNonce(CoinDefinition.genesisBlockNonce);
@@ -55,13 +58,12 @@ public class MainNetParams extends NetworkParameters {
         checkpoints.put(3901, new Sha256Hash("39c94020b653871bbcb29c9489bb12f84c5e89adef75f2e5c5f59e88869129d9"));
         checkpoints.put(40821, new Sha256Hash("e0471675f9c98aa5ed321ed951d140d4603d96254a4ca9fbca07b8da5ee11954"));
         checkpoints.put(41433, new Sha256Hash("627e18cc08a276282781705bac09508992dc8b665391edd7bde8a601f011954c"));
-        checkpoints.put(44606, new Sha256Hash("5ceeec38564a36ee3e1e5404970f5715efe0420e92c8e92bedfdfef782c49320"));		
+        checkpoints.put(44606, new Sha256Hash("5ceeec38564a36ee3e1e5404970f5715efe0420e92c8e92bedfdfef782c49320"));	
 
         dnsSeeds = new String[] {
-			"via.cryptoservices.net",
-
+                "via.cryptoservices.net",
         };
-    }
+    }    
 
     private static MainNetParams instance;
     public static synchronized MainNetParams get() {

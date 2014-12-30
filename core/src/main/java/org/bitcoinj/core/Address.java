@@ -17,8 +17,6 @@
 
 package org.bitcoinj.core;
 
-import org.bitcoinj.params.MainNetParams;
-import org.bitcoinj.params.TestNet3Params;
 import org.bitcoinj.params.Networks;
 import org.bitcoinj.script.Script;
 
@@ -49,7 +47,7 @@ public class Address extends VersionedChecksummedBytes {
     /**
      * Construct an address from parameters, the address version, and the hash160 form. Example:<p>
      *
-     * <pre>new Address(NetworkParameters.prodNet(), NetworkParameters.getAddressHeader(), Hex.decode("4a22c3c4cbb31e4d03b15550636762bda0baf85a"));</pre>
+     * <pre>new Address(MainNetParams.get(), NetworkParameters.getAddressHeader(), Hex.decode("4a22c3c4cbb31e4d03b15550636762bda0baf85a"));</pre>
      */
     public Address(NetworkParameters params, int version, byte[] hash160) throws WrongNetworkException {
         super(version, hash160);
@@ -78,7 +76,7 @@ public class Address extends VersionedChecksummedBytes {
     /**
      * Construct an address from parameters and the hash160 form. Example:<p>
      *
-     * <pre>new Address(NetworkParameters.prodNet(), Hex.decode("4a22c3c4cbb31e4d03b15550636762bda0baf85a"));</pre>
+     * <pre>new Address(MainNetParams.get(), Hex.decode("4a22c3c4cbb31e4d03b15550636762bda0baf85a"));</pre>
      */
     public Address(NetworkParameters params, byte[] hash160) {
         super(params.getAddressHeader(), hash160);
@@ -89,14 +87,14 @@ public class Address extends VersionedChecksummedBytes {
     /**
      * Construct an address from parameters and the standard "human readable" form. Example:<p>
      *
-     * <pre>new Address(NetworkParameters.prodNet(), "17kzeh4N8g49GFvdDzSf8PjaPfyoD1MndL");</pre><p>
+     * <pre>new Address(MainNetParams.get(), "17kzeh4N8g49GFvdDzSf8PjaPfyoD1MndL");</pre><p>
      *
      * @param params The expected NetworkParameters or null if you don't want validation.
      * @param address The textual form of the address, such as "17kzeh4N8g49GFvdDzSf8PjaPfyoD1MndL"
      * @throws AddressFormatException if the given address doesn't parse or the checksum is invalid
-     * @throws WrongNetworkException if the given address is valid but for a different chain (eg testnet vs prodnet)
+     * @throws WrongNetworkException if the given address is valid but for a different chain (eg testnet vs mainnet)
      */
-public Address(@Nullable NetworkParameters params, String address) throws AddressFormatException {
+    public Address(@Nullable NetworkParameters params, String address) throws AddressFormatException {
         super(address);
         if (params != null) {
             if (!isAcceptableVersion(params, version)) {
@@ -140,7 +138,6 @@ public Address(@Nullable NetworkParameters params, String address) throws Addres
      *
      * @return a NetworkParameters representing the network the address is intended for.
      */
-    @Nullable
     public NetworkParameters getParameters() {
         return params;
     }

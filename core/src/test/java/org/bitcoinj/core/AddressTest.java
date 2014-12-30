@@ -36,26 +36,22 @@ public class AddressTest {
 
     @Test
     public void stringification() throws Exception {
-        if(CoinDefinition.supportsTestNet) {
         // Test a testnet address.
-            Address a = new Address(testParams, HEX.decode("fda79a24e50ff70ff42f7d89585da5bd19d9e5cc"));
-            assertEquals("n4eA2nbYqErp7H6jebchxAN59DmNpksexv", a.toString());
-            assertFalse(a.isP2SHAddress());
-        }
+        Address a = new Address(testParams, HEX.decode("fda79a24e50ff70ff42f7d89585da5bd19d9e5cc"));
+        assertEquals("n4eA2nbYqErp7H6jebchxAN59DmNpksexv", a.toString());
+        assertFalse(a.isP2SHAddress());
+
         Address b = new Address(mainParams, HEX.decode("4a22c3c4cbb31e4d03b15550636762bda0baf85a"));
-        assertEquals(CoinDefinition.UNITTEST_ADDRESS, b.toString());
+        assertEquals("17kzeh4N8g49GFvdDzSf8PjaPfyoD1MndL", b.toString());
         assertFalse(b.isP2SHAddress());
     }
     
     @Test
     public void decoding() throws Exception {
-        if(CoinDefinition.supportsTestNet)
-        {
-            Address a = new Address(testParams, "n4eA2nbYqErp7H6jebchxAN59DmNpksexv");
-            assertEquals("fda79a24e50ff70ff42f7d89585da5bd19d9e5cc", Utils.HEX.encode(a.getHash160()));
-        }
+        Address a = new Address(testParams, "n4eA2nbYqErp7H6jebchxAN59DmNpksexv");
+        assertEquals("fda79a24e50ff70ff42f7d89585da5bd19d9e5cc", Utils.HEX.encode(a.getHash160()));
 
-        Address b = new Address(mainParams, CoinDefinition.UNITTEST_ADDRESS);
+        Address b = new Address(mainParams, "17kzeh4N8g49GFvdDzSf8PjaPfyoD1MndL");
         assertEquals("4a22c3c4cbb31e4d03b15550636762bda0baf85a", Utils.HEX.encode(b.getHash160()));
     }
     
@@ -82,8 +78,8 @@ public class AddressTest {
         }
 
         // Check the case of a mismatched network.
-       try {
-            new Address(testParams, CoinDefinition.UNITTEST_ADDRESS);
+        try {
+            new Address(testParams, "17kzeh4N8g49GFvdDzSf8PjaPfyoD1MndL");
             fail();
         } catch (WrongNetworkException e) {
             // Success.
@@ -96,13 +92,10 @@ public class AddressTest {
 
     @Test
     public void getNetwork() throws Exception {
-        NetworkParameters params = Address.getParametersFromAddress(CoinDefinition.UNITTEST_ADDRESS);
+        NetworkParameters params = Address.getParametersFromAddress("17kzeh4N8g49GFvdDzSf8PjaPfyoD1MndL");
         assertEquals(MainNetParams.get().getId(), params.getId());
-        if(CoinDefinition.supportsTestNet)
-        {
-            params = Address.getParametersFromAddress("n4eA2nbYqErp7H6jebchxAN59DmNpksexv");
-            assertEquals(TestNet3Params.get().getId(), params.getId());
-        }
+        params = Address.getParametersFromAddress("n4eA2nbYqErp7H6jebchxAN59DmNpksexv");
+        assertEquals(TestNet3Params.get().getId(), params.getId());
     }
 
     @Test

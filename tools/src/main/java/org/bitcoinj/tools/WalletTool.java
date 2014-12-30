@@ -18,6 +18,7 @@
 package org.bitcoinj.tools;
 
 import org.bitcoinj.core.*;
+import org.bitcoinj.core.Wallet.BalanceType;
 import org.bitcoinj.crypto.DeterministicKey;
 import org.bitcoinj.crypto.KeyCrypterException;
 import org.bitcoinj.crypto.MnemonicCode;
@@ -48,6 +49,8 @@ import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 import joptsimple.util.DateConverter;
+
+import org.bitcoinj.wallet.MarriedKeyChain;
 import org.bitcoinj.wallet.Protos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,9 +62,12 @@ import java.io.*;
 import java.math.BigInteger;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.security.SecureRandom;
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -80,7 +86,7 @@ public class WalletTool {
 
     private static OptionSet options;
     private static OptionSpec<Date> dateFlag;
-    private static OptionSpec<Integer> unixtimeFlag;
+    private static OptionSpec<Long> unixtimeFlag;
     private static OptionSpec<String> seedFlag, watchFlag;
     private static OptionSpec<String> xpubkeysFlag;
 
@@ -177,7 +183,8 @@ public class WalletTool {
     }
     
     public enum NetworkEnum {
-        PROD,
+        MAIN,
+        PROD, // alias for MAIN
         TEST,
         REGTEST
     }
@@ -195,7 +202,7 @@ public class WalletTool {
         OptionSpec<String> walletFileName = parser.accepts("wallet").withRequiredArg().defaultsTo("wallet");
         seedFlag = parser.accepts("seed").withRequiredArg();
         watchFlag = parser.accepts("watchkey").withRequiredArg();
-        OptionSpec<NetworkEnum> netFlag = parser.accepts("net").withOptionalArg().ofType(NetworkEnum.class).defaultsTo(NetworkEnum.PROD);
+        OptionSpec<NetworkEnum> netFlag = parser.accepts("net").withOptionalArg().ofType(NetworkEnum.class).defaultsTo(NetworkEnum.MAIN);
         dateFlag = parser.accepts("date").withRequiredArg().ofType(Date.class)
                 .withValuesConvertedBy(DateConverter.datePattern("yyyy/MM/dd"));
         OptionSpec<WaitForEnum> waitForFlag = parser.accepts("waitfor").withRequiredArg().ofType(WaitForEnum.class);
@@ -211,7 +218,7 @@ public class WalletTool {
         OptionSpec<String> outputFlag = parser.accepts("output").withRequiredArg();
         parser.accepts("value").withRequiredArg();
         parser.accepts("fee").withRequiredArg();
-        unixtimeFlag = parser.accepts("unixtime").withRequiredArg().ofType(Integer.class);
+        unixtimeFlag = parser.accepts("unixtime").withRequiredArg().ofType(Long.class);
         OptionSpec<String> conditionFlag = parser.accepts("condition").withRequiredArg();
         parser.accepts("locktime").withRequiredArg();
         parser.accepts("allow-unconfirmed");
@@ -252,9 +259,10 @@ public class WalletTool {
             logger.setLevel(Level.SEVERE);
         }
         switch (netFlag.value(options)) {
+            case MAIN:
             case PROD:
                 params = MainNetParams.get();
-                chainFileName = new File("prodnet.chain");
+                chainFileName = new File("mainnet.chain");
                 break;
             case TEST:
                 params = TestNet3Params.get();
@@ -426,19 +434,24 @@ public class WalletTool {
         String[] xpubkeys = options.valueOf(xpubkeysFlag).split(",");
         ImmutableList.Builder<DeterministicKey> keys = ImmutableList.builder();
         for (String xpubkey : xpubkeys) {
-            keys.add(DeterministicKey.deserializeB58(null, xpubkey.trim()));
+            keys.add(DeterministicKey.deserializeB58(null, xpubkey.trim(), params));
         }
-        wallet.addFollowingAccountKeys(keys.build());
+        MarriedKeyChain chain = MarriedKeyChain.builder()
+                .random(new SecureRandom())
+                .followingKeys(keys.build())
+                .build();
+        wallet.addAndActivateHDChain(chain);
     }
 
     private static void rotate() throws BlockStoreException {
         setup();
-        peers.startAsync();
-        peers.awaitRunning();
+        peers.start();
         // Set a key rotation time and possibly broadcast the resulting maintenance transactions.
         long rotationTimeSecs = Utils.currentTimeSeconds();
         if (options.has(dateFlag)) {
             rotationTimeSecs = options.valueOf(dateFlag).getTime() / 1000;
+        } else if (options.has(unixtimeFlag)) {
+            rotationTimeSecs = options.valueOf(unixtimeFlag);
         }
         log.info("Setting wallet key rotation time to {}", rotationTimeSecs);
         wallet.setKeyRotationTime(rotationTimeSecs);
@@ -506,7 +519,11 @@ public class WalletTool {
                 }
                 String destination = parts[0];
                 try {
-                    Coin value = parseCoin(parts[1]);
+                    Coin value;
+                    if ("ALL".equalsIgnoreCase(parts[1]))
+                        value = wallet.getBalance(BalanceType.ESTIMATED);
+                    else
+                        value = parseCoin(parts[1]);
                     if (destination.startsWith("0")) {
                         // Treat as a raw public key.
                         byte[] pubKey = new BigInteger(destination, 16).toByteArray();
@@ -545,7 +562,7 @@ public class WalletTool {
 
             try {
                 if (lockTimeStr != null) {
-                    t.setLockTime(Transaction.parseLockTimeStr(lockTimeStr));
+                    t.setLockTime(parseLockTimeStr(lockTimeStr));
                     // For lock times to take effect, at least one output must have a non-final sequence number.
                     t.getInputs().get(0).setSequenceNumber(0);
                     // And because we modified the transaction after it was completed, we must re-sign the inputs.
@@ -565,8 +582,7 @@ public class WalletTool {
             }
 
             setup();
-            peers.startAsync();
-            peers.awaitRunning();
+            peers.start();
             // Wait for peers to connect, the tx to be sent to one of them and for it to be propagated across the
             // network. Once propagation is complete and we heard the transaction back from all our peers, it will
             // be committed to the wallet.
@@ -586,6 +602,19 @@ public class WalletTool {
         } catch (InsufficientMoneyException e) {
             System.err.println("Insufficient funds: have " + wallet.getBalance().toFriendlyString());
         }
+    }
+
+    /**
+     * Parses the string either as a whole number of blocks, or if it contains slashes as a YYYY/MM/DD format date
+     * and returns the lock time in wire format.
+     */
+    private static long parseLockTimeStr(String lockTimeStr) throws ParseException {
+        if (lockTimeStr.indexOf("/") != -1) {
+            SimpleDateFormat format = new SimpleDateFormat("yyyy/MM/dd", Locale.US);
+            Date date = format.parse(lockTimeStr);
+            return date.getTime() / 1000;
+        }
+        return Long.parseLong(lockTimeStr);
     }
 
     private static void sendPaymentRequest(String location, boolean verifyPki) {
@@ -669,8 +698,7 @@ public class WalletTool {
             ListenableFuture<PaymentProtocol.Ack> future = session.sendPayment(ImmutableList.of(req.tx), null, null);
             if (future == null) {
                 // No payment_url for submission so, broadcast and wait.
-                peers.startAsync();
-                peers.awaitRunning();
+                peers.start();
                 peers.broadcastTransaction(req.tx).get();
             } else {
                 PaymentProtocol.Ack ack = future.get();
@@ -809,6 +837,8 @@ public class WalletTool {
             peers = new PeerGroup(params, chain);
         }
         peers.setUserAgent("WalletTool", "1.0");
+        if (params == RegTestParams.get())
+            peers.setMinBroadcastConnections(1);
         peers.addWallet(wallet);
         if (options.has("peers")) {
             String peersFlag = (String) options.valueOf("peers");
@@ -822,13 +852,7 @@ public class WalletTool {
                 }
             }
         } else if (!options.has("tor")) {
-            // If Tor mode then PeerGroup already has discovery set up.
-//            if (params == RegTestParams.get()) {
-//                log.info("Assuming regtest node on localhost");
-//                peers.addAddress(PeerAddress.localhost(params));
-//            } else {
-                peers.addPeerDiscovery(new DnsDiscovery(params));
-            //}
+            peers.addPeerDiscovery(new DnsDiscovery(params));
         }
     }
 
@@ -836,9 +860,8 @@ public class WalletTool {
         try {
             setup();
             int startTransactions = wallet.getTransactions(true).size();
-            DownloadListener listener = new DownloadListener();
-            peers.startAsync();
-            peers.awaitRunning();
+            DownloadProgressTracker listener = new DownloadProgressTracker();
+            peers.start();
             peers.startBlockChainDownload(listener);
             try {
                 listener.await();
@@ -859,8 +882,7 @@ public class WalletTool {
     private static void shutdown() {
         try {
             if (peers == null) return;  // setup() never called so nothing to do.
-            peers.stopAsync();
-            peers.awaitTerminated();
+            peers.stop();
             saveWallet(walletFile);
             store.close();
             wallet = null;
@@ -901,7 +923,7 @@ public class WalletTool {
             }
             wallet = Wallet.fromSeed(params, seed);
         } else if (options.has(watchFlag)) {
-            DeterministicKey watchKey = DeterministicKey.deserializeB58(null, options.valueOf(watchFlag));
+            DeterministicKey watchKey = DeterministicKey.deserializeB58(null, options.valueOf(watchFlag), params);
             wallet = Wallet.fromWatchingKey(params, watchKey);
         } else {
             wallet = new Wallet(params);

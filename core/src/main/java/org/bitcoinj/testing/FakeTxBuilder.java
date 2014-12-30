@@ -17,6 +17,8 @@
 package org.bitcoinj.testing;
 
 import org.bitcoinj.core.*;
+import org.bitcoinj.crypto.TransactionSignature;
+import org.bitcoinj.script.ScriptBuilder;
 import org.bitcoinj.store.BlockStore;
 import org.bitcoinj.store.BlockStoreException;
 
@@ -43,7 +45,8 @@ public class FakeTxBuilder {
         TransactionOutput prevOut = new TransactionOutput(params, prevTx, value, to);
         prevTx.addOutput(prevOut);
         // Connect it.
-        t.addInput(prevOut);
+        t.addInput(prevOut).setScriptSig(ScriptBuilder.createInputScript(TransactionSignature.dummy()));
+        // Fake signature.
         // Serialize/deserialize to ensure internal state is stripped, as if it had been read from the wire.
         return roundTripTransaction(params, t);
     }
@@ -78,11 +81,11 @@ public class FakeTxBuilder {
     }
 
     /**
-     * Transaction[0] is a feeder transaction, supplying BTC to Transaction[1]
+     * Transaction[0] is a feeder transaction, supplying VIA to Transaction[1]
      */
     public static Transaction[] createFakeTx(NetworkParameters params, Coin value,
                                              Address to, Address from) {
-        // Create fake TXes of sufficient realism to exercise the unit tests. This transaction send BTC from the
+        // Create fake TXes of sufficient realism to exercise the unit tests. This transaction send VIA from the
         // from address, to the to address with to one to somewhere else to simulate change.
         Transaction t = new Transaction(params);
         TransactionOutput outputToMe = new TransactionOutput(params, t, value, to);

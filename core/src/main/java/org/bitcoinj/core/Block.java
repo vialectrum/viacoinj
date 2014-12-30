@@ -1,5 +1,6 @@
 /**
  * Copyright 2011 Google Inc.
+ * Copyright 2014 Andreas Schildbach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,7 +89,7 @@ public class Block extends Message {
 
     /** Stores the hash of the block. If null, getHash() will recalculate it. */
     private transient Sha256Hash hash;
-	private transient Sha256Hash scryptHash;
+    private transient Sha256Hash scryptHash;
 
     private transient boolean headerParsed;
     private transient boolean transactionsParsed;
@@ -517,8 +518,8 @@ public class Block extends Message {
             throw new RuntimeException(e); // Cannot happen.
         }
     }
-	
-	private Sha256Hash calculateScryptHash() {			
+    
+    private Sha256Hash calculateScryptHash() {			
         try {			
             ByteArrayOutputStream bos = new UnsafeByteArrayOutputStream(HEADER_SIZE);			
             writeHeader(bos);			
@@ -530,14 +531,14 @@ public class Block extends Message {
 
     /**
      * Returns the hash of the block (which for a valid, solved block should be below the target) in the form seen on
-     * the block explorer. If you call this on block 1 in the production chain
+     * the block explorer. If you call this on block 1 in the mainnet chain
      * you will get "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048".
      */
     public String getHashAsString() {
         return getHash().toString();
     }
-	
-	public String getScryptHashAsString() {			
+    
+    public String getScryptHashAsString() {			
         return getScryptHash().toString();			
     }
 
@@ -551,7 +552,7 @@ public class Block extends Message {
             hash = calculateHash();
         return hash;
     }
-	
+    
     public Sha256Hash getScryptHash() {			
         if (scryptHash == null)			
             scryptHash = calculateScryptHash();			
@@ -610,7 +611,7 @@ public class Block extends Message {
         s.append("   time: [");
         s.append(time);
         s.append("] ");
-        s.append(new Date(time * 1000));
+        s.append(Utils.dateTimeFormat(time * 1000));
         s.append("\n");
         s.append("   difficulty target (nBits): ");
         s.append(difficultyTarget);
@@ -661,7 +662,6 @@ public class Block extends Message {
             throw new VerificationException("Difficulty target is bad: " + target.toString());
         return target;
     }
-	
 
     /** Returns true if the hash of the block is OK (lower than difficulty target). */
     private boolean checkProofOfWork(boolean throwException) throws VerificationException {
@@ -922,7 +922,7 @@ public class Block extends Message {
         unCacheHeader();
         this.prevBlockHash = prevBlockHash;
         this.hash = null;
-		this.scryptHash = null;
+        this.scryptHash = null;
     }
 
     /**
@@ -945,7 +945,7 @@ public class Block extends Message {
         unCacheHeader();
         this.time = time;
         this.hash = null;
-		this.scryptHash = null;
+        this.scryptHash = null;
     }
 
     /**
@@ -967,7 +967,7 @@ public class Block extends Message {
         unCacheHeader();
         this.difficultyTarget = compactForm;
         this.hash = null;
-		this.scryptHash = null;
+        this.scryptHash = null;
     }
 
     /**
@@ -984,7 +984,6 @@ public class Block extends Message {
         unCacheHeader();
         this.nonce = nonce;
         this.hash = null;
-		this.scryptHash = null;
     }
 
     /** Returns an immutable list of transactions held in this block. */
@@ -1000,6 +999,7 @@ public class Block extends Message {
     static private int txCounter;
 
     /** Adds a coinbase transaction to the block. This exists for unit tests. */
+    @VisibleForTesting
     void addCoinbaseTransaction(byte[] pubKeyTo, Coin value) {
         unCacheTransactions();
         transactions = new ArrayList<Transaction>();
@@ -1009,7 +1009,8 @@ public class Block extends Message {
         //
         // Here we will do things a bit differently so a new address isn't needed every time. We'll put a simple
         // counter in the scriptSig so every transaction has a different hash.
-        coinbase.addInput(new TransactionInput(params, coinbase, new byte[]{(byte) txCounter, (byte) (txCounter++ >> 8)}));
+        coinbase.addInput(new TransactionInput(params, coinbase,
+                new ScriptBuilder().data(new byte[]{(byte) txCounter, (byte) (txCounter++ >> 8)}).build().getProgram()));
         coinbase.addOutput(new TransactionOutput(params, coinbase, value,
                 ScriptBuilder.createOutputScript(ECKey.fromPublicOnly(pubKeyTo)).getProgram()));
         transactions.add(coinbase);
@@ -1079,12 +1080,12 @@ public class Block extends Message {
 
     @VisibleForTesting
     public Block createNextBlock(@Nullable Address to, TransactionOutPoint prevOut) {
-        return createNextBlock(to, prevOut, Utils.currentTimeSeconds(), pubkeyForTesting, FIFTY_COINS);
+        return createNextBlock(to, prevOut, getTimeSeconds() + 5, pubkeyForTesting, FIFTY_COINS);
     }
 
     @VisibleForTesting
     public Block createNextBlock(@Nullable Address to, Coin value) {
-        return createNextBlock(to, null, Utils.currentTimeSeconds(), pubkeyForTesting, value);
+        return createNextBlock(to, null, getTimeSeconds() + 5, pubkeyForTesting, value);
     }
 
     @VisibleForTesting
@@ -1098,7 +1099,7 @@ public class Block extends Message {
     }
 
     /**
-     * Create a block sending 50BTC as a coinbase transaction to the public key specified.
+     * Create a block sending 50VIA as a coinbase transaction to the public key specified.
      * This method is intended for test use only.
      */
     @VisibleForTesting

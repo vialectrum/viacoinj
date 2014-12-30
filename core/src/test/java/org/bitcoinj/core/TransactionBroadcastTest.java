@@ -59,8 +59,7 @@ public class TransactionBroadcastTest extends TestWithPeerGroup {
         // Fix the random permutation that TransactionBroadcast uses to shuffle the peers.
         TransactionBroadcast.random = new Random(0);
         peerGroup.setMinBroadcastConnections(2);
-        peerGroup.startAsync();
-        peerGroup.awaitRunning();
+        peerGroup.start();
     }
 
     @Override
@@ -73,7 +72,7 @@ public class TransactionBroadcastTest extends TestWithPeerGroup {
     public void fourPeers() throws Exception {
         InboundMessageQueuer[] channels = { connectPeer(1), connectPeer(2), connectPeer(3), connectPeer(4) };
         Transaction tx = new Transaction(params);
-        TransactionBroadcast broadcast = new TransactionBroadcast(peerGroup, tx);
+        TransactionBroadcast broadcast = new TransactionBroadcast(peerGroup, blockChain.getContext(), tx);
         ListenableFuture<Transaction> future = broadcast.broadcast();
         assertFalse(future.isDone());
         // We expect two peers to receive a tx message, and at least one of the others must announce for the future to
@@ -94,6 +93,7 @@ public class TransactionBroadcastTest extends TestWithPeerGroup {
         inbound(channels[1], InventoryMessage.with(tx));
         pingAndWait(channels[1]);
         Threading.waitForUserCode();
+        // FIXME flaky test - future is not handled on user thread
         assertTrue(future.isDone());
     }
 
@@ -178,7 +178,7 @@ public class TransactionBroadcastTest extends TestWithPeerGroup {
             t1 = (Transaction) m;
         }
         assertNotNull(t1);
-        // 49 BTC in change.
+        // 49 VIA in change.
         assertEquals(valueOf(49, 0), t1.getValueSentToMe(wallet));
         // The future won't complete until it's heard back from the network on p2.
         InventoryMessage inv = new InventoryMessage(params);

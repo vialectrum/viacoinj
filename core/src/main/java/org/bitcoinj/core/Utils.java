@@ -25,18 +25,19 @@ import com.google.common.io.BaseEncoding;
 import com.google.common.io.Resources;
 import com.google.common.primitives.Ints;
 import com.google.common.primitives.UnsignedLongs;
-import com.lambdaworks.crypto.SCrypt;
-
 import org.spongycastle.crypto.digests.RIPEMD160Digest;
+import com.lambdaworks.crypto.SCrypt;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
-import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URL;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -62,9 +63,7 @@ public class Utils {
     /** The string that prefixes all text messages signed using Bitcoin keys. */
     public static final String BITCOIN_SIGNED_MESSAGE_HEADER = CoinDefinition.coinName + " Signed Message:\n";
     public static final byte[] BITCOIN_SIGNED_MESSAGE_HEADER_BYTES = BITCOIN_SIGNED_MESSAGE_HEADER.getBytes(Charsets.UTF_8);
-	
-	    // TODO: Replace this nanocoins business with something better.
-
+    
     /**
      * How many "nanocoins" there are in a Bitcoin.
      * <p/>
@@ -167,7 +166,7 @@ public class Utils {
     public static byte[] doubleDigest(byte[] input) {
         return doubleDigest(input, 0, input.length);
     }
-	
+    
 	public static byte[] scryptDigest(byte[] input) {
         try {
             return SCrypt.scrypt(input, input, 1024, 1, 1, 32);
@@ -474,6 +473,28 @@ public class Utils {
         return currentTimeMillis() / 1000;
     }
 
+    private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
+
+    /**
+     * Formats a given date+time value to an ISO 8601 string.
+     * @param dateTime value to format, as a Date
+     */
+    public static String dateTimeFormat(Date dateTime) {
+        DateFormat iso8601 = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
+        iso8601.setTimeZone(UTC);
+        return iso8601.format(dateTime);
+    }
+
+    /**
+     * Formats a given date+time value to an ISO 8601 string.
+     * @param dateTime value to format, unix time (ms)
+     */
+    public static String dateTimeFormat(long dateTime) {
+        DateFormat iso8601 = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
+        iso8601.setTimeZone(UTC);
+        return iso8601.format(dateTime);
+    }
+
     public static byte[] copyOf(byte[] in, int length) {
         byte[] out = new byte[length];
         System.arraycopy(in, 0, out, 0, Math.min(length, in.length));
@@ -633,4 +654,22 @@ public class Utils {
         return Joiner.on('\n').join(lines);
     }
 
+    // Can't use Closeable here because it's Java 7 only and Android devices only got that with KitKat.
+    public static InputStream closeUnchecked(InputStream stream) {
+        try {
+            stream.close();
+            return stream;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static OutputStream closeUnchecked(OutputStream stream) {
+        try {
+            stream.close();
+            return stream;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
