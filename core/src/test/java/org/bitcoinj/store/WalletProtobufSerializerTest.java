@@ -287,8 +287,18 @@ public class WalletProtobufSerializerTest {
     public void testRoundTripMarriedWallet() throws Exception {
         // create 2-of-2 married wallet
         myWallet = new Wallet(params);
+<<<<<<< HEAD
         final DeterministicKeyChain keyChain = new DeterministicKeyChain(new SecureRandom());
         DeterministicKey partnerKey = DeterministicKey.deserializeB58(null, keyChain.getWatchingKey().serializePubB58());
+=======
+        final DeterministicKeyChain partnerChain = new DeterministicKeyChain(new SecureRandom());
+        DeterministicKey partnerKey = DeterministicKey.deserializeB58(null, partnerChain.getWatchingKey().serializePubB58(params), params);
+        MarriedKeyChain chain = MarriedKeyChain.builder()
+                .random(new SecureRandom())
+                .followingKeys(partnerKey)
+                .threshold(2).build();
+        myWallet.addAndActivateHDChain(chain);
+>>>>>>> upstream/master
 
         myWallet.addFollowingAccountKeys(ImmutableList.of(partnerKey), 2);
         myAddress = myWallet.currentAddress(KeyChain.KeyPurpose.RECEIVE_FUNDS);

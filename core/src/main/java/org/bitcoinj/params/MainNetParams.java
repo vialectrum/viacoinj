@@ -31,6 +31,7 @@ public class MainNetParams extends NetworkParameters {
         super();
         interval = INTERVAL;
         targetTimespan = TARGET_TIMESPAN;
+<<<<<<< HEAD
         maxTarget = Utils.decodeCompactBits(0x1e01ffffL);
         dumpedPrivateKeyHeader = 128 + CoinDefinition.AddressHeader;
         addressHeader = CoinDefinition.AddressHeader;
@@ -41,6 +42,21 @@ public class MainNetParams extends NetworkParameters {
         genesisBlock.setDifficultyTarget(0x1e01ffffL);
         genesisBlock.setTime(CoinDefinition.genesisBlockTime);
         genesisBlock.setNonce(CoinDefinition.genesisBlockNonce);
+=======
+        maxTarget = Utils.decodeCompactBits(0x1d00ffffL);
+        dumpedPrivateKeyHeader = 128;
+        addressHeader = 0;
+        p2shHeader = 5;
+        acceptableAddressCodes = new int[] { addressHeader, p2shHeader };
+        port = 8333;
+        packetMagic = 0xf9beb4d9L;
+        bip32HeaderPub = 0x0488B21E; //The 4 byte header that serializes in base58 to "xpub".
+        bip32HeaderPriv = 0x0488ADE4; //The 4 byte header that serializes in base58 to "xprv"
+
+        genesisBlock.setDifficultyTarget(0x1d00ffffL);
+        genesisBlock.setTime(1231006505L);
+        genesisBlock.setNonce(2083236893);
+>>>>>>> upstream/master
         id = ID_MAINNET;
         subsidyDecreaseBlockCount = 2102400;
         spendableCoinbaseDepth = 3600;

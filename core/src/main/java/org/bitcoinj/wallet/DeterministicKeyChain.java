@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 The bitcoinj developers.
+ * Copyright 2014 The bitcoinj developers.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -682,7 +682,7 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
                 for (int i : key.getDeterministicKey().getPathList())
                     path.add(new ChildNumber(i));
                 // Deserialize the public key and path.
-                ECPoint pubkey = ECKey.CURVE.getCurve().decodePoint(key.getPublicKey().toByteArray());
+                LazyECPoint pubkey = new LazyECPoint(ECKey.CURVE.getCurve(), key.getPublicKey().toByteArray());
                 final ImmutableList<ChildNumber> immutablePath = ImmutableList.copyOf(path);
                 // Possibly create the chain, if we didn't already do so yet.
                 boolean isWatchingAccountKey = false;
@@ -1070,6 +1070,12 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
         return keys;
     }
 
+    /**
+     * Returns only the keys that have been issued by this chain, lookahead not included.
+     */
+    public List<ECKey> getIssuedReceiveKeys() {
+        return getKeys(false);
+    }
 
     /**
      * Returns leaf keys issued by this chain (including lookahead zone)
@@ -1115,4 +1121,77 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
             lock.unlock();
         }
     }
+<<<<<<< HEAD
+=======
+
+    /**
+     * Whether the keychain is married.  A keychain is married when it vends P2SH addresses
+     * from multiple keychains in a multisig relationship.
+     * @see org.bitcoinj.wallet.MarriedKeyChain
+     */
+    public boolean isMarried() {
+        return false;
+    }
+
+    /** Get redeem data for a key.  Only applicable to married keychains. */
+    public RedeemData getRedeemData(DeterministicKey followedKey) {
+        throw new UnsupportedOperationException();
+    }
+
+    /** Create a new key and return the matching output script.  Only applicable to married keychains. */
+    public Script freshOutputScript(KeyPurpose purpose) {
+        throw new UnsupportedOperationException();
+    }
+
+    public String toString(boolean includePrivateKeys, NetworkParameters params) {
+        final StringBuilder builder2 = new StringBuilder();
+        if (seed != null) {
+            if (seed.isEncrypted()) {
+                builder2.append(String.format("Seed is encrypted%n"));
+            } else if (includePrivateKeys) {
+                final List<String> words = seed.getMnemonicCode();
+                builder2.append(
+                        String.format("Seed as words: %s%nSeed as hex:   %s%n", Joiner.on(' ').join(words),
+                                seed.toHexString())
+                );
+            }
+            builder2.append(String.format("Seed birthday: %d  [%s]%n", seed.getCreationTimeSeconds(),
+                    Utils.dateTimeFormat(seed.getCreationTimeSeconds() * 1000)));
+        }
+        final DeterministicKey watchingKey = getWatchingKey();
+        // Don't show if it's been imported from a watching wallet already, because it'd result in a weird/
+        // unintuitive result where the watching key in a watching wallet is not the one it was created with
+        // due to the parent fingerprint being missing/not stored. In future we could store the parent fingerprint
+        // optionally as well to fix this, but it seems unimportant for now.
+        if (watchingKey.getParent() != null) {
+            builder2.append(String.format("Key to watch:  %s%n", watchingKey.serializePubB58(params)));
+        }
+        formatAddresses(includePrivateKeys, params, builder2);
+        return builder2.toString();
+    }
+
+    protected void formatAddresses(boolean includePrivateKeys, NetworkParameters params, StringBuilder builder2) {
+        for (ECKey key : getKeys(false))
+            key.formatKeyWithAddress(includePrivateKeys, builder2, params);
+    }
+
+    /** The number of signatures required to spend coins received by this keychain. */
+    public void setSigsRequiredToSpend(int sigsRequiredToSpend) {
+        this.sigsRequiredToSpend = sigsRequiredToSpend;
+    }
+
+    /**
+     * Returns the number of signatures required to spend transactions for this KeyChain. It's the N from
+     * N-of-M CHECKMULTISIG script for P2SH transactions and always 1 for other transaction types.
+     */
+    public int getSigsRequiredToSpend() {
+        return sigsRequiredToSpend;
+    }
+
+    /** Returns the redeem script by its hash or null if this keychain did not generate the script. */
+    @Nullable
+    public RedeemData findRedeemDataByScriptHash(ByteString bytes) {
+        return null;
+    }
+>>>>>>> upstream/master
 }
